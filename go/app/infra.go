@@ -41,7 +41,14 @@ func NewItemRepository() ItemRepository {
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	// STEP 4-1: add an implementation to store an item
+
 	items, err := i.loadItems()
+	if len(items) > 0 {
+		item.ID = items[len(items)-1].ID + 1
+	} else {
+		item.ID = 1
+	}
+
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -46,6 +47,7 @@ func (s Server) Run() int {
 	mux.HandleFunc("GET /", h.Hello)
 	mux.HandleFunc("POST /items", h.AddItem)
 	mux.HandleFunc("GET /items", h.GetItems)
+	mux.HandleFunc("GET /items/{item_id}", h.GetItem)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
 
 	// start the server
@@ -179,17 +181,51 @@ func (s *Handlers) GetItems(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// step4-5
+func (s *Handlers) GetItem(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	//itemIdをセットする
+	itemIDstr := r.PathValue("item_id")
+	itemID, err := strconv.Atoi(itemIDstr)
+	if itemIDstr == "" {
+		http.Error(w, "item_id is required", http.StatusBadRequest)
+		return
+	}
+	//全商品を取得
+	items, err := s.itemRepo.GetAll(ctx)
+	if err != nil {
+		http.Error(w, "failed to retrieve items", http.StatusInternalServerError)
+		return
+	}
+
+	//範囲をかくにん
+	if itemID < 0 || itemID >= len(items) {
+		http.Error(w, "item not found", http.StatusNotFound)
+		return
+	}
+
+	//配列番号をもとに商品を検索
+	item := items[itemID]
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(item)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
 // storeImage stores an image and returns the file path and an error if any.
 // this method calculates the hash sum of the image as a file name to avoid the duplication of a same file
 // and stores it in the image directory.
 func (s *Handlers) storeImage(image []byte) (filePath string, err error) {
 	// STEP 4-4: add an implementation to store an image
-	// TODO:
-	// - calc hash sum 画像のハッシュ値を計算
+	// 画像のハッシュ値を計算
 	hash := sha256.Sum256(image)
 	hashHex := hex.EncodeToString(hash[:])
 
-	// - build image file path 保存パスの作成
+	// 保存パスの作成
 	//画像ファイル名をハッシュ値.jpgにする
 	fileName := hashHex + ".jpg"
 
@@ -200,20 +236,20 @@ func (s *Handlers) storeImage(image []byte) (filePath string, err error) {
 	}
 
 	if _, err := os.Stat(filePath); err == nil {
-		// check if the image already existsすでに同じ画像ファイルがある場合は、そのファイル名をそのまま返す（保存はしない）
+		//すでに同じ画像ファイルがある場合は、そのファイル名をそのまま返す（保存はしない）
 		return fileName, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		// ファイル存在確認で予期せぬエラーが発生した場合はエラーを返す
 		return "", fmt.Errorf("failed to check file existence: %w", err)
 	}
 
-	// store image 画像を保存
+	// 画像を保存
 	err = os.WriteFile(filePath, image, 0644)
 	if err != nil {
 		return "", fmt.Errorf("failed to save image: %w", err)
 	}
 
-	// - return the image file path 保存したファイル名を返す
+	// 保存したファイル名を返す
 	return fileName, nil
 }
 
