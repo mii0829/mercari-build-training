@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -122,18 +124,20 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// STEP 4-4: uncomment on adding an implementation to store an image
-	// fileName, err := s.storeImage(req.Image)
-	// if err != nil {
-	// 	slog.Error("failed to store image: ", "error", err)
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+	fileName, err := s.storeImage(req.Image)
+
+	if err != nil {
+		slog.Error("failed to store image", "error", err)
+		http.Error(w, "failed to store image", http.StatusInternalServerError)
+		return
+	}
 
 	item := &Item{
 		Name: req.Name,
 		// STEP 4-2: add a category field
 		Category: req.Category,
 		// STEP 4-4: add an image field
+		Image: fileName,
 	}
 	message := fmt.Sprintf("item received: %s", item.Name)
 	slog.Info(message)
@@ -181,13 +185,36 @@ func (s *Handlers) GetItems(w http.ResponseWriter, r *http.Request) {
 func (s *Handlers) storeImage(image []byte) (filePath string, err error) {
 	// STEP 4-4: add an implementation to store an image
 	// TODO:
-	// - calc hash sum
-	// - build image file path
-	// - check if the image already exists
-	// - store image
-	// - return the image file path
+	// - calc hash sum 画像のハッシュ値を計算
+	hash := sha256.Sum256(image)
+	hashHex := hex.EncodeToString(hash[:])
 
-	return
+	// - build image file path 保存パスの作成
+	//画像ファイル名をハッシュ値.jpgにする
+	fileName := hashHex + ".jpg"
+
+	filePath, err = s.buildImagePath(fileName)
+	slog.Info("Saving image to", "path", filePath)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := os.Stat(filePath); err == nil {
+		// check if the image already existsすでに同じ画像ファイルがある場合は、そのファイル名をそのまま返す（保存はしない）
+		return fileName, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		// ファイル存在確認で予期せぬエラーが発生した場合はエラーを返す
+		return "", fmt.Errorf("failed to check file existence: %w", err)
+	}
+
+	// store image 画像を保存
+	err = os.WriteFile(filePath, image, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to save image: %w", err)
+	}
+
+	// - return the image file path 保存したファイル名を返す
+	return fileName, nil
 }
 
 type GetImageRequest struct {

@@ -15,6 +15,7 @@ type Item struct {
 	ID       int    `db:"id" json:"-"`
 	Name     string `db:"name" json:"name"`
 	Category string `db:"category" json:"category"`
+	Image    string `db:"image" json:"image"`
 }
 
 // Please run `go generate ./...` to generate the mock implementation
@@ -81,7 +82,7 @@ func (i *itemRepository) saveItems(items []Item) error {
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ") // 見やすいように整形
+	encoder.SetIndent("", "  ")
 	return encoder.Encode(items)
 }
 
