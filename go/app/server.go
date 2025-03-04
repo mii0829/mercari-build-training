@@ -25,7 +25,10 @@ type Server struct {
 // This method returns 0 if the server started successfully, and 1 otherwise.
 func (s Server) Run() int {
 	// set up logger
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		//task4-6
+		Level: slog.LevelDebug, //ログレベルをdebug以上(Debug, Info, warn, Error) に変更
+	}))
 	slog.SetDefault(logger)
 	// STEP 4-6: set the log level to DEBUG
 	slog.SetLogLoggerLevel(slog.LevelInfo)
