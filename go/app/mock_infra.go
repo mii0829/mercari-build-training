@@ -41,10 +41,10 @@ func (m *MockItemRepository) EXPECT() *MockItemRepositoryMockRecorder {
 }
 
 // GetAll mocks base method.
-func (m *MockItemRepository) GetAll(ctx context.Context) ([]Item, error) {
+func (m *MockItemRepository) GetAll(ctx context.Context) ([]*Item, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAll", ctx)
-	ret0, _ := ret[0].([]Item)
+	ret0, _ := ret[0].([]*Item)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

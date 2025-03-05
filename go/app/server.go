@@ -175,7 +175,12 @@ func (s *Handlers) GetItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string][]Item{"items": items}
+	var itemValues []Item
+	for _, item := range items {
+		itemValues = append(itemValues, *item)
+	}
+
+	resp := map[string][]Item{"items": itemValues}
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
@@ -202,14 +207,14 @@ func (s *Handlers) GetItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//範囲をかくにん
-	if itemID < 0 || itemID >= len(items) {
+	//範囲をかくにん(item_idは１はじまり)
+	if itemID < 1 || itemID >= len(items) {
 		http.Error(w, "item not found", http.StatusNotFound)
 		return
 	}
 
-	//配列番号をもとに商品を検索
-	item := items[itemID]
+	//配列番号をもとに商品を検索(1から始まるように設定)
+	item := items[itemID-1]
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(item)
