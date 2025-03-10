@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -86,9 +87,9 @@ func (s *Handlers) Hello(w http.ResponseWriter, r *http.Request) {
 
 type AddItemRequest struct {
 	Name string `form:"name"`
-	// Category string `form:"category"` // STEP 4-2: add a category field
+	// Category string form:"category" // STEP 4-2: add a category field
 	Category string `form:"category"`
-	Image    []byte `form:"image"` // STEP 4-4: add an image field
+	Image    []byte `form:"image_name"` // STEP 4-4: add an image field
 }
 
 type AddItemResponse struct {
@@ -115,6 +116,19 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 		return nil, errors.New("category is required")
 	}
 	// STEP 4-4: validate the image field
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		return req, nil
+	}
+	defer file.Close()
+
+	//ファイルを全部読みだす
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	req.Image = imageBytes
+
 	return req, nil
 }
 
@@ -308,10 +322,10 @@ func (s *Handlers) buildImagePath(imageFileName string) (string, error) {
 	}
 
 	// check if the image exists
-	_, err = os.Stat(imgPath)
-	if err != nil {
-		return imgPath, errImageNotFound
-	}
+	// _, err = os.Stat(imgPath)
+	// if err != nil {
+	// 	return imgPath, errImageNotFound
+	// }
 
 	return imgPath, nil
 }
