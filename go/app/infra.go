@@ -4,10 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"log"
+	"log/slog"
 	"sync"
 
-	// STEP 5-1: uncomment this line
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -28,6 +27,7 @@ type ItemRepository interface {
 	Insert(ctx context.Context, item *Item) error
 	GetAll(ctx context.Context) ([]*Item, error)
 	GetByID(ctx context.Context, id int) (*Item, error)
+	SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -52,9 +52,9 @@ func getDB() *sql.DB {
 		var err error
 		db, err = sql.Open("sqlite3", "db/mercari.sqlite3")
 		if err != nil {
-			log.Fatalf("failed to connect to database")
+			slog.Error("failed to connect to database", "error", err)
 		} else {
-			log.Printf("success to connect to database")
+			slog.Info("successfully connected to database")
 		}
 	})
 	return db
@@ -68,10 +68,11 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	_, err := db.ExecContext(ctx, query, item.Name, item.Category, item.Image)
 
 	if err != nil {
+		slog.Error("failed to insert item", "error", err)
 		return err
 	}
 
-	return err
+	return nil
 }
 
 // GetAll：items.jsonから全商品を取得
@@ -137,4 +138,39 @@ func StoreImage(fileName string, image []byte) error {
 	// STEP 4-4: add an implementation to store an image
 
 	return nil
+}
+
+func (r *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error) {
+	db := getDB()
+
+	// ここではキーワードが無いなら エラーメッセージを返す
+	if keyword == "" {
+		return nil, errors.New("keyword is required")
+	}
+
+	// LIKE で検索機能を実装('%' || ? || '%' で部分一致もできる)
+	rows, err := db.QueryContext(ctx, `
+        SELECT id, name, category, image_name
+          FROM items
+         WHERE name LIKE '%' || ? || '%'
+    `, keyword)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []*Item
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image); err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
+	}
+
+	// 見つからない場合はエラーを返す
+	if len(items) == 0 {
+		return nil, errors.New("no items found matching the keyword")
+	}
+	return items, nil
 }

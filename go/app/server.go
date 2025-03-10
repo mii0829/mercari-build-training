@@ -53,6 +53,7 @@ func (s Server) Run() int {
 	mux.HandleFunc("GET /items", h.GetItems)
 	mux.HandleFunc("GET /items/{item_id}", h.GetItem)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
+	mux.HandleFunc("GET /search", h.Search)
 
 	// start the server
 	slog.Info("http server started on", "port", s.Port)
@@ -328,4 +329,23 @@ func (s *Handlers) buildImagePath(imageFileName string) (string, error) {
 	// }
 
 	return imgPath, nil
+}
+
+func (s *Handlers) Search(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// クエリパラメータ "?keyword=xxx" を取得
+	keyword := r.URL.Query().Get("keyword")
+
+	items, err := s.itemRepo.SearchByKeyword(ctx, keyword)
+	if err != nil {
+		http.Error(w, "failed to retrieve items", http.StatusInternalServerError)
+		return
+	}
+	resp := map[string][]*Item{"items": items}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
