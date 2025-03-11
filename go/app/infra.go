@@ -24,6 +24,7 @@ type Item struct {
 //
 //go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -package=${GOPACKAGE} -destination=./mock_$GOFILE
 type ItemRepository interface {
+	CategoryInsert(ctx context.Context, categoryName string) (int, error)
 	Insert(ctx context.Context, item *Item) error
 	GetAll(ctx context.Context) ([]*Item, error)
 	GetByID(ctx context.Context, id int) (*Item, error)
@@ -60,12 +61,46 @@ func getDB() *sql.DB {
 	return db
 }
 
+func (i *itemRepository) CategoryInsert(ctx context.Context, categoryName string) (int, error) {
+	db := getDB()
+
+	//既存のカテゴリIDを探す
+	var catID int
+	err := db.QueryRowContext(ctx,
+		`SELECT id FROM categories WHERE name =?`,
+		categoryName,
+	).Scan(catID)
+
+	if err == sql.ErrNoRows {
+		//既存IDが見つからなければINSERTする
+		res, err := db.ExecContext(ctx, `INSERT INTO categories (name) VALUES (?)`, categoryName)
+		if err != nil {
+			return 0, err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil {
+			return 0, err
+		}
+		catID = int(lastID)
+	} else if err != nil {
+		//それ以外のエラーはそのまま返す
+		return 0, err
+	}
+	return catID, nil
+}
+
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	db := getDB()
 
-	query := "INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)"
-	_, err := db.ExecContext(ctx, query, item.Name, item.Category, item.Image)
+	catID, err := i.CategoryInsert(ctx, item.Category)
+	if err != nil {
+		slog.Error("failed to CategoryInsert", "error", err)
+		return err
+	}
+
+	query := `INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)`
+	_, err = db.ExecContext(ctx, query, item.Name, catID, item.Image)
 
 	if err != nil {
 		slog.Error("failed to insert item", "error", err)
@@ -79,8 +114,12 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 func (i *itemRepository) GetAll(ctx context.Context) ([]*Item, error) {
 	db := getDB()
 
-	rows, err := db.QueryContext(ctx, "SELECT id, name, category, image_name FROM items")
-
+	//JOINでcategoryとitemテーブルをつなげて取得する
+	rows, err := db.QueryContext(ctx, `
+        SELECT i.id, i.name, c.name AS category, i.image_name
+          FROM items i
+          JOIN categories c ON i.category_id = c.id
+    `)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +143,12 @@ func (i *itemRepository) GetAll(ctx context.Context) ([]*Item, error) {
 func (r *itemRepository) GetByID(ctx context.Context, id int) (*Item, error) {
 	db := getDB()
 
-	row := db.QueryRowContext(ctx, "SELECT id, name, category, image_name FROM items WHERE id = ?", id)
+	row := db.QueryRowContext(ctx, `
+        SELECT i.id, i.name, c.name AS category, i.image_name
+          FROM items i
+          JOIN categories c ON i.category_id = c.id
+         WHERE i.id = ?
+    `, id)
 
 	var item Item
 	err := row.Scan(&item.ID, &item.Name, &item.Category, &item.Image)
@@ -114,23 +158,6 @@ func (r *itemRepository) GetByID(ctx context.Context, id int) (*Item, error) {
 
 	return &item, nil
 }
-
-// items.jsonを読み込み
-// func (i *itemRepository) loadItems() ([]Item, error) {
-// 	file, err := os.OpenFile(i.fileName, os.O_RDWR|os.O_CREATE, 0644)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer file.Close()
-
-// 	var items []Item
-// 	err = json.NewDecoder(file).Decode(&items)
-// 	if err != nil && err.Error() != "EOF" {
-// 		return nil, err
-// 	}
-
-// 	return items, nil
-// }
 
 // StoreImage stores an image and returns an error if any.
 // This package doesn't have a related interface for simplicity.
@@ -150,9 +177,10 @@ func (r *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([
 
 	// LIKE で検索機能を実装('%' || ? || '%' で部分一致もできる)
 	rows, err := db.QueryContext(ctx, `
-        SELECT id, name, category, image_name
-          FROM items
-         WHERE name LIKE '%' || ? || '%'
+        SELECT i.id, i.name, c.name AS category, i.image_name
+          FROM items i
+          JOIN categories c ON i.category_id = c.id
+         WHERE i.name LIKE '%' || ? || '%'
     `, keyword)
 	if err != nil {
 		return nil, err
