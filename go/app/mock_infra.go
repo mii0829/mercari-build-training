@@ -40,6 +40,21 @@ func (m *MockItemRepository) EXPECT() *MockItemRepositoryMockRecorder {
 	return m.recorder
 }
 
+// CategoryInsert mocks base method.
+func (m *MockItemRepository) CategoryInsert(ctx context.Context, categoryName string) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CategoryInsert", ctx, categoryName)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CategoryInsert indicates an expected call of CategoryInsert.
+func (mr *MockItemRepositoryMockRecorder) CategoryInsert(ctx, categoryName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CategoryInsert", reflect.TypeOf((*MockItemRepository)(nil).CategoryInsert), ctx, categoryName)
+}
+
 // GetAll mocks base method.
 func (m *MockItemRepository) GetAll(ctx context.Context) ([]*Item, error) {
 	m.ctrl.T.Helper()
@@ -55,6 +70,21 @@ func (mr *MockItemRepositoryMockRecorder) GetAll(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAll", reflect.TypeOf((*MockItemRepository)(nil).GetAll), ctx)
 }
 
+// GetByID mocks base method.
+func (m *MockItemRepository) GetByID(ctx context.Context, id int) (*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetByID", ctx, id)
+	ret0, _ := ret[0].(*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetByID indicates an expected call of GetByID.
+func (mr *MockItemRepositoryMockRecorder) GetByID(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByID", reflect.TypeOf((*MockItemRepository)(nil).GetByID), ctx, id)
+}
+
 // Insert mocks base method.
 func (m *MockItemRepository) Insert(ctx context.Context, item *Item) error {
 	m.ctrl.T.Helper()
@@ -67,4 +97,19 @@ func (m *MockItemRepository) Insert(ctx context.Context, item *Item) error {
 func (mr *MockItemRepositoryMockRecorder) Insert(ctx, item any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Insert", reflect.TypeOf((*MockItemRepository)(nil).Insert), ctx, item)
+}
+
+// SearchByKeyword mocks base method.
+func (m *MockItemRepository) SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchByKeyword", ctx, keyword)
+	ret0, _ := ret[0].([]*Item)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchByKeyword indicates an expected call of SearchByKeyword.
+func (mr *MockItemRepositoryMockRecorder) SearchByKeyword(ctx, keyword any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchByKeyword", reflect.TypeOf((*MockItemRepository)(nil).SearchByKeyword), ctx, keyword)
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -52,6 +53,7 @@ func (s Server) Run() int {
 	mux.HandleFunc("GET /items", h.GetItems)
 	mux.HandleFunc("GET /items/{item_id}", h.GetItem)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
+	mux.HandleFunc("GET /search", h.Search)
 
 	// start the server
 	slog.Info("http server started on", "port", s.Port)
@@ -86,9 +88,9 @@ func (s *Handlers) Hello(w http.ResponseWriter, r *http.Request) {
 
 type AddItemRequest struct {
 	Name string `form:"name"`
-	// Category string `form:"category"` // STEP 4-2: add a category field
+	// Category string form:"category" // STEP 4-2: add a category field
 	Category string `form:"category"`
-	Image    []byte `form:"image"` // STEP 4-4: add an image field
+	Image    []byte `form:"image_name"` // STEP 4-4: add an image field
 }
 
 type AddItemResponse struct {
@@ -115,6 +117,19 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 		return nil, errors.New("category is required")
 	}
 	// STEP 4-4: validate the image field
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		return req, nil
+	}
+	defer file.Close()
+
+	//ファイルを全部読みだす
+	imageBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+	req.Image = imageBytes
+
 	return req, nil
 }
 
@@ -175,12 +190,7 @@ func (s *Handlers) GetItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var itemValues []Item
-	for _, item := range items {
-		itemValues = append(itemValues, *item)
-	}
-
-	resp := map[string][]Item{"items": itemValues}
+	resp := map[string][]*Item{"items": items}
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
@@ -201,20 +211,11 @@ func (s *Handlers) GetItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//全商品を取得
-	items, err := s.itemRepo.GetAll(ctx)
+	item, err := s.itemRepo.GetByID(ctx, itemID)
 	if err != nil {
 		http.Error(w, "failed to retrieve items", http.StatusInternalServerError)
 		return
 	}
-
-	//範囲をかくにん(item_idは１はじまり)
-	if itemID < 1 || itemID >= len(items) {
-		http.Error(w, "item not found", http.StatusNotFound)
-		return
-	}
-
-	//配列番号をもとに商品を検索(1から始まるように設定)
-	item := items[itemID-1]
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(item)
@@ -322,10 +323,29 @@ func (s *Handlers) buildImagePath(imageFileName string) (string, error) {
 	}
 
 	// check if the image exists
-	_, err = os.Stat(imgPath)
-	if err != nil {
-		return imgPath, errImageNotFound
-	}
+	// _, err = os.Stat(imgPath)
+	// if err != nil {
+	// 	return imgPath, errImageNotFound
+	// }
 
 	return imgPath, nil
+}
+
+func (s *Handlers) Search(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// クエリパラメータ "?keyword=xxx" を取得
+	keyword := r.URL.Query().Get("keyword")
+
+	items, err := s.itemRepo.SearchByKeyword(ctx, keyword)
+	if err != nil {
+		http.Error(w, "failed to retrieve items", http.StatusInternalServerError)
+		return
+	}
+	resp := map[string][]*Item{"items": items}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

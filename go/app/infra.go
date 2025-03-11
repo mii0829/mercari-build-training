@@ -2,11 +2,12 @@ package app
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
-	"os"
-	// STEP 5-1: uncomment this line
-	// _ "github.com/mattn/go-sqlite3"
+	"log/slog"
+	"sync"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var errImageNotFound = errors.New("image not found")
@@ -23,8 +24,11 @@ type Item struct {
 //
 //go:generate go run go.uber.org/mock/mockgen -source=$GOFILE -package=${GOPACKAGE} -destination=./mock_$GOFILE
 type ItemRepository interface {
+	CategoryInsert(ctx context.Context, categoryName string) (int, error)
 	Insert(ctx context.Context, item *Item) error
 	GetAll(ctx context.Context) ([]*Item, error)
+	GetByID(ctx context.Context, id int) (*Item, error)
+	SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -38,64 +42,121 @@ func NewItemRepository() ItemRepository {
 	return &itemRepository{fileName: "items.json"}
 }
 
+var (
+	db   *sql.DB
+	once sync.Once
+)
+
+// DBを読み込む
+func getDB() *sql.DB {
+	once.Do(func() { //１回だけDBを開く
+		var err error
+		db, err = sql.Open("sqlite3", "db/mercari.sqlite3")
+		if err != nil {
+			slog.Error("failed to connect to database", "error", err)
+		} else {
+			slog.Info("successfully connected to database")
+		}
+	})
+	return db
+}
+
+func (i *itemRepository) CategoryInsert(ctx context.Context, categoryName string) (int, error) {
+	db := getDB()
+
+	//既存のカテゴリIDを探す
+	var catID int
+	err := db.QueryRowContext(ctx,
+		`SELECT id FROM categories WHERE name =?`,
+		categoryName,
+	).Scan(catID)
+
+	if err == sql.ErrNoRows {
+		//既存IDが見つからなければINSERTする
+		res, err := db.ExecContext(ctx, `INSERT INTO categories (name) VALUES (?)`, categoryName)
+		if err != nil {
+			return 0, err
+		}
+		lastID, err := res.LastInsertId()
+		if err != nil {
+			return 0, err
+		}
+		catID = int(lastID)
+	} else if err != nil {
+		//それ以外のエラーはそのまま返す
+		return 0, err
+	}
+	return catID, nil
+}
+
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
-	// STEP 4-1: add an implementation to store an item
+	db := getDB()
 
-	items, err := i.loadItems()
-
+	catID, err := i.CategoryInsert(ctx, item.Category)
 	if err != nil {
+		slog.Error("failed to CategoryInsert", "error", err)
 		return err
 	}
 
-	items = append(items, *item)
+	query := `INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)`
+	_, err = db.ExecContext(ctx, query, item.Name, catID, item.Image)
 
-	return i.saveItems(items)
+	if err != nil {
+		slog.Error("failed to insert item", "error", err)
+		return err
+	}
+
+	return nil
 }
 
 // GetAll：items.jsonから全商品を取得
 func (i *itemRepository) GetAll(ctx context.Context) ([]*Item, error) {
-	items, err := i.loadItems()
+	db := getDB()
+
+	//JOINでcategoryとitemテーブルをつなげて取得する
+	rows, err := db.QueryContext(ctx, `
+        SELECT i.id, i.name, c.name AS category, i.image_name
+          FROM items i
+          JOIN categories c ON i.category_id = c.id
+    `)
 	if err != nil {
 		return nil, err
 	}
 
-	var itemPtrs []*Item
-	for index := range items {
-		itemPtrs = append(itemPtrs, &items[index])
-	}
+	defer rows.Close()
 
-	return itemPtrs, nil
-}
-
-// items.jsonを読み込み
-func (i *itemRepository) loadItems() ([]Item, error) {
-	file, err := os.OpenFile(i.fileName, os.O_RDWR|os.O_CREATE, 0644)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var items []Item
-	err = json.NewDecoder(file).Decode(&items)
-	if err != nil && err.Error() != "EOF" {
-		return nil, err
+	var items []*Item
+	for rows.Next() {
+		var item Item
+		err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
 	}
 
 	return items, nil
 }
 
-// items.jsonに保存
-func (i *itemRepository) saveItems(items []Item) error {
-	file, err := os.Create(i.fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+// IDから特定の商品を取得
+func (r *itemRepository) GetByID(ctx context.Context, id int) (*Item, error) {
+	db := getDB()
 
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	return encoder.Encode(items)
+	row := db.QueryRowContext(ctx, `
+        SELECT i.id, i.name, c.name AS category, i.image_name
+          FROM items i
+          JOIN categories c ON i.category_id = c.id
+         WHERE i.id = ?
+    `, id)
+
+	var item Item
+	err := row.Scan(&item.ID, &item.Name, &item.Category, &item.Image)
+	if err != nil {
+		return nil, err
+	}
+
+	return &item, nil
 }
 
 // StoreImage stores an image and returns an error if any.
@@ -104,4 +165,40 @@ func StoreImage(fileName string, image []byte) error {
 	// STEP 4-4: add an implementation to store an image
 
 	return nil
+}
+
+func (r *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error) {
+	db := getDB()
+
+	// ここではキーワードが無いなら エラーメッセージを返す
+	if keyword == "" {
+		return nil, errors.New("keyword is required")
+	}
+
+	// LIKE で検索機能を実装('%' || ? || '%' で部分一致もできる)
+	rows, err := db.QueryContext(ctx, `
+        SELECT i.id, i.name, c.name AS category, i.image_name
+          FROM items i
+          JOIN categories c ON i.category_id = c.id
+         WHERE i.name LIKE '%' || ? || '%'
+    `, keyword)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []*Item
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image); err != nil {
+			return nil, err
+		}
+		items = append(items, &item)
+	}
+
+	// 見つからない場合はエラーを返す
+	if len(items) == 0 {
+		return nil, errors.New("no items found matching the keyword")
+	}
+	return items, nil
 }
