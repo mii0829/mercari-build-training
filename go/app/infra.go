@@ -35,11 +35,15 @@ type ItemRepository interface {
 type itemRepository struct {
 	// fileName is the path to the JSON file storing items.
 	fileName string
+	db       *sql.DB
 }
 
 // NewItemRepository creates a new itemRepository.
 func NewItemRepository() ItemRepository {
-	return &itemRepository{fileName: "items.json"}
+	return &itemRepository{
+		fileName: "items.json",
+		db:       getDB(),
+	}
 }
 
 var (
@@ -62,7 +66,7 @@ func getDB() *sql.DB {
 }
 
 func (i *itemRepository) CategoryInsert(ctx context.Context, categoryName string) (int, error) {
-	db := getDB()
+	db := i.db
 
 	//既存のカテゴリIDを探す
 	var catID int
@@ -91,7 +95,7 @@ func (i *itemRepository) CategoryInsert(ctx context.Context, categoryName string
 
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
-	db := getDB()
+	db := i.db
 
 	catID, err := i.CategoryInsert(ctx, item.Category)
 	if err != nil {
@@ -112,7 +116,7 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 
 // GetAll：items.jsonから全商品を取得
 func (i *itemRepository) GetAll(ctx context.Context) ([]*Item, error) {
-	db := getDB()
+	db := i.db
 
 	//JOINでcategoryとitemテーブルをつなげて取得する
 	rows, err := db.QueryContext(ctx, `
@@ -141,7 +145,7 @@ func (i *itemRepository) GetAll(ctx context.Context) ([]*Item, error) {
 
 // IDから特定の商品を取得
 func (r *itemRepository) GetByID(ctx context.Context, id int) (*Item, error) {
-	db := getDB()
+	db := r.db
 
 	row := db.QueryRowContext(ctx, `
         SELECT i.id, i.name, c.name AS category, i.image_name
@@ -168,7 +172,7 @@ func StoreImage(fileName string, image []byte) error {
 }
 
 func (r *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([]*Item, error) {
-	db := getDB()
+	db := r.db
 
 	// ここではキーワードが無いなら エラーメッセージを返す
 	if keyword == "" {
@@ -201,4 +205,11 @@ func (r *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([
 		return nil, errors.New("no items found matching the keyword")
 	}
 	return items, nil
+}
+
+func NewItemRepositoryWithDB(db *sql.DB) ItemRepository {
+	return &itemRepository{
+		fileName: "items.json",
+		db:       db,
+	}
 }
