@@ -73,7 +73,7 @@ func (i *itemRepository) CategoryInsert(ctx context.Context, categoryName string
 	err := db.QueryRowContext(ctx,
 		`SELECT id FROM categories WHERE name =?`,
 		categoryName,
-	).Scan(catID)
+	).Scan(&catID)
 
 	if err == sql.ErrNoRows {
 		//既存IDが見つからなければINSERTする
