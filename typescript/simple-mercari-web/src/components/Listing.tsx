@@ -73,7 +73,7 @@ export const Listing = ({ onListingCompleted }: Prop) => {
             onChange={onFileChange}
             required
           />
-          <button type="submit">List this item</button>
+          <button type="submit" className='button'>List this item</button>
         </div>
       </form>
     </div>
