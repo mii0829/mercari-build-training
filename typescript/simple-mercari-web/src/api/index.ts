@@ -41,3 +41,16 @@ export const postItem = async (input: CreateItemInput): Promise<Response> => {
   });
   return response;
 };
+
+
+export const searchItem = async (keyword: string): Promise<ItemListResponse> => {
+  const response = await fetch(`${SERVER_URL}/search?keyword=${encodeURIComponent(keyword)}`, {
+    method: 'GET',
+    mode: 'cors',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+  });
+  return response.json();
+};
