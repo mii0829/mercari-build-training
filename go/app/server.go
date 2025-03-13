@@ -89,8 +89,8 @@ func (s *Handlers) Hello(w http.ResponseWriter, r *http.Request) {
 type AddItemRequest struct {
 	Name string `form:"name"`
 	// Category string form:"category" // STEP 4-2: add a category field
-	Category string `form:"category"`
-	Image    []byte `form:"image_name"` // STEP 4-4: add an image field
+	Category  string `form:"category"`
+	ImageName []byte `form:"image_name"` // STEP 4-4: add an image field
 }
 
 type AddItemResponse struct {
@@ -128,7 +128,7 @@ func parseAddItemRequest(r *http.Request) (*AddItemRequest, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Image = imageBytes
+	req.ImageName = imageBytes
 
 	return req, nil
 }
@@ -144,7 +144,7 @@ func (s *Handlers) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// STEP 4-4: uncomment on adding an implementation to store an image
-	fileName, err := s.storeImage(req.Image)
+	fileName, err := s.storeImage(req.ImageName)
 
 	if err != nil {
 		slog.Error("failed to store image", "error", err)
