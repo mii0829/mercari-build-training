@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Item, fetchItems } from '~/api';
+import { type Item, fetchItems } from '~/api';
 
-const PLACEHOLDER_IMAGE = import.meta.env.VITE_FRONTEND_URL + '/logo192.png';
-
+const PLACEHOLDER_IMAGE = `${import.meta.env.VITE_FRONTEND_URL}/logo192.png`;
 interface Prop {
   reload: boolean;
   onLoadCompleted: () => void;
@@ -31,11 +30,13 @@ export const ItemList = ({ reload, onLoadCompleted }: Prop) => {
   return (
     <div>
       {items.map((item) => {
+        const imageUrl = item.image_name
+          ? `http://localhost:9000/images/${item.image_name}`
+          : PLACEHOLDER_IMAGE;
         return (
           <div key={item.id} className="ItemList">
-            {/* TODO: Task 2: Show item images */}
-            <img src={PLACEHOLDER_IMAGE} />
-            <p>
+            <img src={imageUrl} alt={item.name} className='itemImage'/>
+            <p className='info'>
               <span>Name: {item.name}</span>
               <br />
               <span>Category: {item.category}</span>
