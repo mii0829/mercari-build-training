@@ -185,7 +185,8 @@ func (r *itemRepository) SearchByKeyword(ctx context.Context, keyword string) ([
           FROM items i
           JOIN categories c ON i.category_id = c.id
          WHERE i.name LIKE '%' || ? || '%'
-    `, keyword)
+		 	OR c.name LIKE '%' || ? || '%'
+    `, keyword, keyword)
 	if err != nil {
 		return nil, err
 	}

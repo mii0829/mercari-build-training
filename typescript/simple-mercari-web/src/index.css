@@ -55,6 +55,11 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+.box {
+  display: grid;
+  grid-template-columns: 1fr 4fr;
+}
+
 .itemImage {
   width: 100%;
   height: 100%;
@@ -65,6 +70,15 @@ button:focus-visible {
 input {
   background-color: #F7F6F3;
   color: #0a0a0a;
+  margin: 0 1em;
+  height: 3em;
+  border-radius: 8px;
+}
+
+.tag {
+  border: 1px solid #E83D11;
+  padding: 0.5em;
+  border-radius: 8px;
 }
 
 @media (prefers-color-scheme: light) {
