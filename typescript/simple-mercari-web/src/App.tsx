@@ -3,7 +3,7 @@ import './App.css';
 import { ItemList } from '~/components/ItemList';
 import { Listing } from '~/components/Listing';
 import { Search } from '~/components/Search';
-import { Item, searchItem } from '~/api';
+import { type Item, searchItem } from '~/api';
 
 function App() {
   const [reload, setReload] = useState(true);
